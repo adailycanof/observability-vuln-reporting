@@ -1,0 +1,11 @@
+__pycache__/
+*.egg-info/
+.coverage
+.ruff_cache/
+.pytest_cache/
+reports/
+report.md
+report.json
+metrics.prom
+*.sarif
+.env

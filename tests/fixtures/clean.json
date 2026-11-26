@@ -1,0 +1,8 @@
+{
+  "SchemaVersion": 2,
+  "ArtifactName": "public.ecr.aws/example/clean:2.0.0",
+  "ArtifactType": "container_image",
+  "Results": [
+    {"Target": "public.ecr.aws/example/clean:2.0.0 (alpine 3.22.0)", "Class": "os-pkgs", "Type": "alpine"}
+  ]
+}

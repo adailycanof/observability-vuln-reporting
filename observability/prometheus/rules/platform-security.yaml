@@ -1,0 +1,45 @@
+groups:
+  - name: platform-security
+    rules:
+      - alert: VaultSealed
+        expr: vault_core_unsealed == 0
+        for: 1m
+        labels:
+          severity: critical
+          team: platform
+        annotations:
+          summary: Vault {{ $labels.instance }} is sealed
+          description: Sealed Vault cannot serve secrets or sign certificates. New pods that need secrets will fail to start.
+          runbook_url: https://github.com/adailycanof/observability-vuln-reporting/blob/main/runbooks/vault-sealed.md
+
+      - alert: CertificateExpiringSoon
+        expr: (certmanager_certificate_expiration_timestamp_seconds - time()) < 7 * 86400
+        for: 1h
+        labels:
+          severity: warning
+          team: platform
+        annotations:
+          summary: Certificate {{ $labels.namespace }}/{{ $labels.name }} expires in {{ $value | humanizeDuration }}
+          description: cert-manager should have renewed it by now, so renewal is probably failing.
+          runbook_url: https://github.com/adailycanof/observability-vuln-reporting/blob/main/runbooks/certificate-renewal-failing.md
+
+      - alert: CertificateNotReady
+        expr: max by (namespace, name) (certmanager_certificate_ready_status{condition="False"}) == 1
+        for: 15m
+        labels:
+          severity: warning
+          team: platform
+        annotations:
+          summary: Certificate {{ $labels.namespace }}/{{ $labels.name }} is not Ready
+          runbook_url: https://github.com/adailycanof/observability-vuln-reporting/blob/main/runbooks/certificate-renewal-failing.md
+
+      - alert: ExternalSecretSyncFailing
+        expr: max by (namespace, name) (externalsecret_status_condition{condition="Ready", status="False"}) == 1
+        for: 15m
+        labels:
+          severity: warning
+          team: platform
+        annotations:
+          summary: ExternalSecret {{ $labels.namespace }}/{{ $labels.name }} cannot sync from the secret store
+          description: The Kubernetes Secret keeps its last value, so rotations in Vault are not reaching the workload.
+          runbook_url: https://github.com/adailycanof/observability-vuln-reporting/blob/main/runbooks/external-secret-sync-failing.md

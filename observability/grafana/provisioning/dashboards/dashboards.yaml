@@ -1,0 +1,9 @@
+apiVersion: 1
+providers:
+  - name: security
+    folder: Security
+    type: file
+    disableDeletion: true
+    allowUiUpdates: false # dashboards are code: change them in Git
+    options:
+      path: /etc/grafana/dashboards

@@ -1,0 +1,92 @@
+rule_files:
+  - ../rules/platform-security.yaml
+
+evaluation_interval: 1m
+
+tests:
+  - name: only the sealed Vault pod alerts, after 1m
+    interval: 30s
+    input_series:
+      - series: 'vault_core_unsealed{instance="vault-0"}'
+        values: "1 1 0 0 0 0 0 0"
+      - series: 'vault_core_unsealed{instance="vault-1"}'
+        values: "1x7"
+    alert_rule_test:
+      - eval_time: 1m
+        alertname: VaultSealed
+        exp_alerts: []
+      - eval_time: 3m
+        alertname: VaultSealed
+        exp_alerts:
+          - exp_labels:
+              severity: critical
+              team: platform
+              instance: vault-0
+            exp_annotations:
+              summary: Vault vault-0 is sealed
+              description: Sealed Vault cannot serve secrets or sign certificates. New pods that need secrets will fail to start.
+              runbook_url: https://github.com/adailycanof/observability-vuln-reporting/blob/main/runbooks/vault-sealed.md
+
+  - name: certificate inside the 7-day window alerts, healthy one does not
+    interval: 1m
+    input_series:
+      # expires at unix time 518400 (day 6), so it is in the window from the start
+      - series: 'certmanager_certificate_expiration_timestamp_seconds{namespace="demo", name="demo-app-tls"}'
+        values: "518400x90"
+      - series: 'certmanager_certificate_expiration_timestamp_seconds{namespace="demo", name="healthy"}'
+        values: "8640000x90"
+    alert_rule_test:
+      - eval_time: 70m
+        alertname: CertificateExpiringSoon
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              team: platform
+              namespace: demo
+              name: demo-app-tls
+            exp_annotations:
+              summary: Certificate demo/demo-app-tls expires in 5d 22h 50m 0s
+              description: cert-manager should have renewed it by now, so renewal is probably failing.
+              runbook_url: https://github.com/adailycanof/observability-vuln-reporting/blob/main/runbooks/certificate-renewal-failing.md
+
+  - name: certificate not ready for 15m
+    interval: 1m
+    input_series:
+      - series: 'certmanager_certificate_ready_status{namespace="demo", name="demo-app-tls", condition="False"}'
+        values: "1x30"
+      - series: 'certmanager_certificate_ready_status{namespace="demo", name="demo-app-tls", condition="True"}'
+        values: "0x30"
+    alert_rule_test:
+      - eval_time: 10m
+        alertname: CertificateNotReady
+        exp_alerts: []
+      - eval_time: 20m
+        alertname: CertificateNotReady
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              team: platform
+              namespace: demo
+              name: demo-app-tls
+            exp_annotations:
+              summary: Certificate demo/demo-app-tls is not Ready
+              runbook_url: https://github.com/adailycanof/observability-vuln-reporting/blob/main/runbooks/certificate-renewal-failing.md
+
+  - name: external secret failing to sync for 15m
+    interval: 1m
+    input_series:
+      - series: 'externalsecret_status_condition{namespace="demo", name="demo-app-credentials", condition="Ready", status="False"}'
+        values: "1x30"
+    alert_rule_test:
+      - eval_time: 20m
+        alertname: ExternalSecretSyncFailing
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              team: platform
+              namespace: demo
+              name: demo-app-credentials
+            exp_annotations:
+              summary: ExternalSecret demo/demo-app-credentials cannot sync from the secret store
+              description: The Kubernetes Secret keeps its last value, so rotations in Vault are not reaching the workload.
+              runbook_url: https://github.com/adailycanof/observability-vuln-reporting/blob/main/runbooks/external-secret-sync-failing.md

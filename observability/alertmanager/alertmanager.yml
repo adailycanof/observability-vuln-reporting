@@ -1,0 +1,27 @@
+# Routing by team + severity. Receivers are placeholders: wire them to
+# Slack/PagerDuty/Teams with secrets from the secret store, never inline.
+route:
+  receiver: default
+  group_by: [alertname, artifact, namespace]
+  group_wait: 30s
+  group_interval: 5m
+  repeat_interval: 4h
+  routes:
+    - matchers: [severity="critical"]
+      receiver: security-pager
+      repeat_interval: 1h
+    - matchers: [team="security"]
+      receiver: security-channel
+    - matchers: [severity="info"]
+      receiver: audit-log-only
+
+inhibit_rules:
+  # A sealed Vault explains every ExternalSecret/Certificate failure behind it
+  - source_matchers: [alertname="VaultSealed"]
+    target_matchers: [alertname=~"ExternalSecretSyncFailing|CertificateNotReady"]
+
+receivers:
+  - name: default
+  - name: security-pager
+  - name: security-channel
+  - name: audit-log-only

@@ -1,0 +1,8 @@
+# Images to track. One per line; comments allowed.
+# Deliberately includes old tags so the report has something to say.
+public.ecr.aws/nginx/nginx-unprivileged:1.30-alpine
+public.ecr.aws/nginx/nginx:1.25-alpine
+hashicorp/vault:2.0.4
+quay.io/jetstack/cert-manager-controller:v1.21.3
+ghcr.io/external-secrets/external-secrets:v2.15.0
+grafana/loki:3.7.10

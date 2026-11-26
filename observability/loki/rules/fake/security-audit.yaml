@@ -1,0 +1,78 @@
+# Loki ruler alerts over audit logs. "fake" is the tenant ID Loki uses when
+# auth_enabled is false; in a multi-tenant Loki this directory is the tenant.
+groups:
+  - name: vault-audit
+    interval: 1m
+    rules:
+      - alert: VaultPermissionDeniedSpike
+        expr: |
+          sum by (namespace) (
+            count_over_time({namespace="vault", container="vault"} |= "\"type\":\"response\"" |= "permission denied" [5m])
+          ) > 10
+        for: 5m
+        labels:
+          severity: warning
+          team: security
+        annotations:
+          summary: "{{ $value }} denied Vault requests in 5m"
+          description: A spike in denials means a misconfigured role after a change, or something probing for secrets it should not have.
+          runbook_url: https://github.com/adailycanof/observability-vuln-reporting/blob/main/runbooks/vault-permission-denied.md
+
+      - alert: VaultRootTokenUsed
+        expr: |
+          sum (
+            count_over_time({namespace="vault", container="vault"} |= "\"type\":\"request\"" | json | auth_display_name="root" [5m])
+          ) > 0
+        labels:
+          severity: critical
+          team: security
+        annotations:
+          summary: The Vault root token was used
+          description: Root should only exist during a recorded break-glass procedure. Confirm there is a change ticket, then revoke the token.
+          runbook_url: https://github.com/adailycanof/observability-vuln-reporting/blob/main/runbooks/vault-root-token-used.md
+
+  - name: kubernetes-audit
+    interval: 1m
+    rules:
+      - alert: KubeSecretReadByHuman
+        expr: |
+          sum by (user_username) (
+            count_over_time({job="kubernetes-audit"} | json
+              | objectRef_resource="secrets" | verb=~"get|list|watch"
+              | user_username!~"system:.*" [10m])
+          ) > 0
+        labels:
+          severity: warning
+          team: security
+        annotations:
+          summary: "{{ $labels.user_username }} read Kubernetes Secrets directly"
+          description: Applications get secrets through External Secrets; people should not need to read them.
+          runbook_url: https://github.com/adailycanof/observability-vuln-reporting/blob/main/runbooks/kube-sensitive-access.md
+
+      - alert: KubeExecIntoPod
+        expr: |
+          sum by (user_username, objectRef_namespace) (
+            count_over_time({job="kubernetes-audit"} | json
+              | objectRef_subresource="exec" | user_username!~"system:.*" [10m])
+          ) > 0
+        labels:
+          severity: info
+          team: security
+        annotations:
+          summary: "{{ $labels.user_username }} exec'd into a pod in {{ $labels.objectRef_namespace }}"
+          runbook_url: https://github.com/adailycanof/observability-vuln-reporting/blob/main/runbooks/kube-sensitive-access.md
+
+      - alert: KubeRBACChangedByHuman
+        expr: |
+          sum by (user_username, objectRef_resource) (
+            count_over_time({job="kubernetes-audit"} | json
+              | objectRef_resource=~"clusterroles|clusterrolebindings|roles|rolebindings"
+              | verb=~"create|update|patch|delete" | user_username!~"system:.*" [10m])
+          ) > 0
+        labels:
+          severity: warning
+          team: security
+        annotations:
+          summary: "{{ $labels.user_username }} changed {{ $labels.objectRef_resource }} outside GitOps"
+          description: RBAC is managed by Argo CD; a manual change is drift at best and privilege escalation at worst.
+          runbook_url: https://github.com/adailycanof/observability-vuln-reporting/blob/main/runbooks/kube-sensitive-access.md
