@@ -42,7 +42,7 @@ services:
 
   pushgateway:
     <<: *hardening
-    image: prom/pushgateway:v1.11.4
+    image: prom/pushgateway:v1.11.5
     ports: ["127.0.0.1:9091:9091"]
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://localhost:9091/-/ready"]
