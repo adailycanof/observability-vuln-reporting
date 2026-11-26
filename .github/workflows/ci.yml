@@ -38,13 +38,16 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+      # Globs are expanded by the runner's shell, then passed to promtool in the container.
       - name: promtool check rules
+        working-directory: observability/prometheus
         run: |
-          docker run --rm -v "$PWD/observability/prometheus:/p" -w /p --entrypoint promtool \
+          docker run --rm -v "$PWD:/p" -w /p --entrypoint promtool \
             prom/prometheus:v3.16.0 check rules rules/*.yaml
       - name: promtool test rules (alert unit tests)
+        working-directory: observability/prometheus/tests
         run: |
-          docker run --rm -v "$PWD/observability/prometheus:/p" -w /p/tests --entrypoint promtool \
+          docker run --rm -v "$PWD/..:/p" -w /p/tests --entrypoint promtool \
             prom/prometheus:v3.16.0 test rules *.yaml
       - name: Grafana dashboards are up to date with the generator
         run: python3 observability/grafana/build_dashboards.py --check
@@ -64,9 +67,8 @@ jobs:
         with:
           fetch-depth: 0
           persist-credentials: false
-      - uses: gitleaks/gitleaks-action@e0c47f4f8be36e29cdc102c57e68cb5cbf0e8d1e # v3.0.0
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: gitleaks (secrets in code or full history)
+        run: docker run --rm -v "$PWD:/repo" ghcr.io/gitleaks/gitleaks:v8.30.0 git /repo --no-banner --redact
       - name: Trivy fs + config scan
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
